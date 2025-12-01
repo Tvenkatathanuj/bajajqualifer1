@@ -17,19 +17,29 @@ public class StartupTask {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @EventListener(ApplicationReadyEvent.class)
-    public void onStartup() throws Exception {
-        // 1. Generate webhook
+    public void onStartup() {
+        try {
+            System.out.println("=== Starting Webhook Process ===");
+            
+            // 1. Generate webhook
         String url = "https://bfhldevapigw.healthrx.co.in/hiring/generateWebhook/JAVA";
         Map<String, String> requestBody = new HashMap<>();
-        requestBody.put("name", "Tanguturi Venkata Thanuj");
-        requestBody.put("regNo", "22bce20003");
-        requestBody.put("email", "venkata.22bce20003@vitapstudent.ac.in");
+        requestBody.put("name", "TANGUTURI VENKATA THANUJ");
+        requestBody.put("regNo", "22BCE20003");
+        requestBody.put("email", "tanguturivenkatathanuj@gmail.com");
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(requestBody, headers);
 
+        System.out.println("Sending POST to generate webhook...");
+        System.out.println("Request: " + requestBody);
+        
         ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+        
+        System.out.println("Response Status: " + response.getStatusCode());
+        System.out.println("Response Body: " + response.getBody());
+        
         if (response.getStatusCode() != HttpStatus.OK) {
             System.err.println("Failed to generate webhook: " + response.getStatusCode());
             return;
@@ -38,20 +48,22 @@ public class StartupTask {
         String webhookUrl = json.get("webhook").asText();
         String accessToken = json.get("accessToken").asText();
 
-        // 2. Prepare SQL query for the new question (highest salaried employee per department, excluding payments on 1st day)
-        String finalQuery = "SELECT d.DEPARTMENT_NAME, p.AMOUNT AS SALARY, CONCAT(e.FIRST_NAME, ' ', e.LAST_NAME) AS EMPLOYEE_NAME, "
-            + "FLOOR(DATEDIFF(CURDATE(), e.DOB) / 365.25) AS AGE\n"
-            + "FROM PAYMENTS p\n"
-            + "JOIN EMPLOYEE e ON p.EMP_ID = e.EMP_ID\n"
-            + "JOIN DEPARTMENT d ON e.DEPARTMENT = d.DEPARTMENT_ID\n"
-            + "WHERE DAY(p.PAYMENT_TIME) <> 1\n"
-            + "AND p.AMOUNT = (\n"
-            + "    SELECT MAX(p2.AMOUNT)\n"
-            + "    FROM PAYMENTS p2\n"
-            + "    WHERE p2.EMP_ID = p.EMP_ID\n"
-            + "      AND DAY(p2.PAYMENT_TIME) <> 1\n"
-            + ")\n"
-            + "ORDER BY d.DEPARTMENT_NAME, SALARY DESC;";
+        System.out.println("Webhook URL: " + webhookUrl);
+        System.out.println("Access Token received: " + (accessToken != null ? "Yes" : "No"));
+
+        // 2. Prepare SQL query for Question 1 (highest salaried employee per department, excluding payments on 1st day)
+        String finalQuery = "SELECT d.DEPARTMENT_NAME, t.SALARY, t.EMPLOYEE_NAME, t.AGE "
+            + "FROM (SELECT e.DEPARTMENT, SUM(p.AMOUNT) AS SALARY, "
+            + "CONCAT(e.FIRST_NAME, ' ', e.LAST_NAME) AS EMPLOYEE_NAME, "
+            + "FLOOR(DATEDIFF('2025-12-01', e.DOB) / 365.25) AS AGE "
+            + "FROM EMPLOYEE e JOIN PAYMENTS p ON e.EMP_ID = p.EMP_ID "
+            + "WHERE DAY(p.PAYMENT_TIME) <> 1 "
+            + "GROUP BY e.EMP_ID, e.FIRST_NAME, e.LAST_NAME, e.DOB, e.DEPARTMENT) t "
+            + "JOIN DEPARTMENT d ON t.DEPARTMENT = d.DEPARTMENT_ID "
+            + "WHERE t.SALARY = (SELECT MAX(t2.SALARY) FROM (SELECT e2.DEPARTMENT, "
+            + "SUM(p2.AMOUNT) AS SALARY FROM EMPLOYEE e2 JOIN PAYMENTS p2 ON e2.EMP_ID = p2.EMP_ID "
+            + "WHERE DAY(p2.PAYMENT_TIME) <> 1 GROUP BY e2.EMP_ID, e2.DEPARTMENT) t2 "
+            + "WHERE t2.DEPARTMENT = t.DEPARTMENT)";
 
         // 3. Submit the solution
         Map<String, String> answerBody = new HashMap<>();
@@ -61,11 +73,21 @@ public class StartupTask {
         answerHeaders.setBearerAuth(accessToken);
         HttpEntity<Map<String, String>> answerEntity = new HttpEntity<>(answerBody, answerHeaders);
 
+        System.out.println("Submitting solution to webhook...");
         ResponseEntity<String> answerResponse = restTemplate.postForEntity(webhookUrl, answerEntity, String.class);
+        
+        System.out.println("Solution Response Status: " + answerResponse.getStatusCode());
+        System.out.println("Solution Response Body: " + answerResponse.getBody());
+        
         if (answerResponse.getStatusCode() == HttpStatus.OK) {
-            System.out.println("Solution submitted successfully!");
+            System.out.println("=== Solution submitted successfully! ===");
         } else {
             System.err.println("Failed to submit solution: " + answerResponse.getStatusCode());
+        }
+        
+        } catch (Exception e) {
+            System.err.println("Error occurred: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }
