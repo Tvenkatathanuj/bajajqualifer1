@@ -26,7 +26,7 @@ public class StartupTask {
         Map<String, String> requestBody = new HashMap<>();
         requestBody.put("name", "TANGUTURI VENKATA THANUJ");
         requestBody.put("regNo", "22BCE20003");
-        requestBody.put("email", "tanguturivenkatathanuj@gmail.com");
+        requestBody.put("email", "venkata.22bce20003@vitapstudent.ac.in");
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
